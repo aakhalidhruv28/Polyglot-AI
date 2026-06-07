@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Language Translator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        /* Hide scrollbar for cleaner textareas unless hovering/scrolling */
+        textarea::-webkit-scrollbar {
+            width: 0px;
+            background: transparent;
+        }
+        textarea:hover::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .toast-enter {
+            transform: translateY(100%);
+            opacity: 0;
+        }
+        .toast-enter-active {
+            transform: translateY(0);
+            opacity: 1;
+            transition: all 0.3s ease-out;
+        }
+        .toast-exit {
+            transform: translateY(0);
+            opacity: 1;
+        }
+        .toast-exit-active {
+            transform: translateY(100%);
+            opacity: 0;
+            transition: all 0.3s ease-in;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 font-sans flex flex-col selection:bg-blue-200">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 py-4 px-6 sm:px-8 flex items-center justify-between sticky top-0 z-10 shadow-sm">
+        <div class="flex items-center gap-2 text-blue-600">
+            <i data-lucide="languages" class="w-7 h-7"></i>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900">Polyglot AI</h1>
+        </div>
+        <div class="text-sm text-slate-500 hidden sm:block">Powered by Gemini</div>
+    </header>
+
+    <!-- Main Container -->
+    <main class="flex-grow flex flex-col max-w-6xl w-full mx-auto p-3 sm:p-6 lg:p-8">
+        
+        <!-- Translation Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 flex-grow">
+            
+            <!-- Source Card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 transition-shadow">
+                <div class="border-b border-slate-100 p-2.5 sm:px-5 flex items-center justify-between bg-slate-50/50">
+                    <select id="sourceLang" class="bg-transparent text-sm font-medium text-slate-700 outline-none cursor-pointer hover:text-slate-900 pr-4 py-1 rounded-md hover:bg-slate-100 transition-colors w-full sm:w-auto max-w-[200px] sm:max-w-none truncate text-ellipsis">
+                        <option value="auto" selected>Detect Language</option>
+                        <!-- Populated by JS -->
+                    </select>
+                    <button id="clearBtn" class="text-slate-400 hover:text-red-500 p-2 sm:p-1.5 rounded-md hover:bg-red-50 transition-colors flex-shrink-0 ml-2" title="Clear text">
+                        <i data-lucide="x" class="w-5 h-5 sm:w-4 sm:h-4"></i>
+                    </button>
+                </div>
+                <div class="relative flex-grow flex flex-col p-3 sm:p-5">
+                    <textarea id="sourceText" placeholder="Enter text to translate..." class="w-full h-full resize-none outline-none text-base sm:text-xl text-slate-800 bg-transparent placeholder-slate-400 min-h-[130px] sm:min-h-[200px]"></textarea>
+                    
+                    <div class="flex items-center justify-between mt-3 sm:mt-4">
+                        <div class="text-xs text-slate-400" id="charCount">0 characters</div>
+                        <button id="translateBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 sm:px-5 sm:py-2.5 rounded-lg font-medium shadow-sm transition-colors flex items-center gap-2 active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed">
+                            <span>Translate</span>
+                            <i data-lucide="arrow-right" class="w-4 h-4 hidden sm:block"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Target Card -->
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 flex flex-col overflow-hidden">
+                <div class="border-b border-slate-100 p-2.5 sm:px-5 flex items-center justify-between bg-slate-50/50">
+                    <select id="targetLang" class="bg-transparent text-sm font-medium text-slate-700 outline-none cursor-pointer hover:text-slate-900 pr-4 py-1 rounded-md hover:bg-slate-100 transition-colors w-full sm:w-auto max-w-[200px] sm:max-w-none truncate text-ellipsis">
+                        <!-- Populated by JS -->
+                    </select>
+                </div>
+                <div class="relative flex-grow flex flex-col p-3 sm:p-5">
+                    
+                    <!-- Loading Overlay -->
+                    <div id="loadingOverlay" class="absolute inset-0 bg-white/80 backdrop-blur-sm hidden flex-col items-center justify-center z-10">
+                        <i data-lucide="loader-2" class="w-8 h-8 text-blue-600 animate-spin mb-3"></i>
+                        <span class="text-sm font-medium text-slate-600 animate-pulse">Translating...</span>
+                    </div>
+
+                    <textarea id="targetText" readonly placeholder="Translation will appear here..." class="w-full h-full resize-none outline-none text-base sm:text-xl text-slate-800 bg-transparent placeholder-slate-300 min-h-[130px] sm:min-h-[200px]"></textarea>
+                    
+                    <!-- Action Bar (Copy & TTS) -->
+                    <div class="flex items-center justify-end gap-2 mt-3 sm:mt-4 opacity-50 pointer-events-none transition-opacity duration-300" id="targetActions">
+                        <button id="ttsBtn" class="p-2 sm:p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors group relative" title="Listen to translation">
+                            <i data-lucide="volume-2" class="w-6 h-6 sm:w-5 sm:h-5 group-active:scale-90 transition-transform"></i>
+                        </button>
+                        <button id="copyBtn" class="p-2 sm:p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors group relative" title="Copy translation">
+                            <i data-lucide="copy" class="w-6 h-6 sm:w-5 sm:h-5 group-active:scale-90 transition-transform"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- Toast Notification Container -->
+    <div id="toastContainer" class="fixed bottom-6 left-1/2 -translate-x-1/2 flex flex-col gap-2 z-50 pointer-events-none"></div>
+
+    <script>
+        // Initialize Lucide Icons
+        lucide.createIcons();
+
+        // --- Configuration & State ---
+        const apiKey = ""; // Enter Your API Key
+        
+        // Comprehensive list of languages supported by most translation models and TTS engines
+        const languages = [
+            { code: 'ar', name: 'Arabic' },
+            { code: 'as', name: 'Assamese' },
+            { code: 'bn', name: 'Bengali' },
+            { code: 'bho', name: 'Bhojpuri' },
+            { code: 'zh', name: 'Chinese' },
+            { code: 'doi', name: 'Dogri' },
+            { code: 'nl', name: 'Dutch' },
+            { code: 'en', name: 'English' },
+            { code: 'fr', name: 'French' },
+            { code: 'de', name: 'German' },
+            { code: 'gu', name: 'Gujarati' },
+            { code: 'hi', name: 'Hindi' },
+            { code: 'it', name: 'Italian' },
+            { code: 'ja', name: 'Japanese' },
+            { code: 'kn', name: 'Kannada' },
+            { code: 'ks', name: 'Kashmiri' },
+            { code: 'gom', name: 'Konkani' },
+            { code: 'ko', name: 'Korean' },
+            { code: 'mai', name: 'Maithili' },
+            { code: 'ml', name: 'Malayalam' },
+            { code: 'mni', name: 'Manipuri (Meiteilon)' },
+            { code: 'mr', name: 'Marathi' },
+            { code: 'ne', name: 'Nepali' },
+            { code: 'or', name: 'Odia (Oriya)' },
+            { code: 'pt', name: 'Portuguese' },
+            { code: 'pa', name: 'Punjabi' },
+            { code: 'ru', name: 'Russian' },
+            { code: 'sa', name: 'Sanskrit' },
+            { code: 'sd', name: 'Sindhi' },
+            { code: 'es', name: 'Spanish' },
+            { code: 'ta', name: 'Tamil' },
+            { code: 'te', name: 'Telugu' },
+            { code: 'tr', name: 'Turkish' },
+            { code: 'ur', name: 'Urdu' },
+            { code: 'vi', name: 'Vietnamese' }
+        ];
+
+        // --- DOM Elements ---
+        const sourceLangSelect = document.getElementById('sourceLang');
+        const targetLangSelect = document.getElementById('targetLang');
+        const sourceText = document.getElementById('sourceText');
+        const targetText = document.getElementById('targetText');
+        const translateBtn = document.getElementById('translateBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const ttsBtn = document.getElementById('ttsBtn');
+        const charCount = document.getElementById('charCount');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const targetActions = document.getElementById('targetActions');
+        const toastContainer = document.getElementById('toastContainer');
+
+        // --- Initialization ---
+        function init() {
+            // Populate language dropdowns
+            languages.forEach(lang => {
+                const option1 = new Option(lang.name, lang.name);
+                const option2 = new Option(lang.name, lang.name);
+                
+                sourceLangSelect.add(option1);
+                targetLangSelect.add(option2);
+            });
+
+            // Set sensible defaults
+            targetLangSelect.value = 'Spanish';
+
+            // Event Listeners
+            sourceText.addEventListener('input', handleInput);
+            translateBtn.addEventListener('click', performTranslation);
+            clearBtn.addEventListener('click', clearInput);
+            copyBtn.addEventListener('click', copyTranslation);
+            ttsBtn.addEventListener('click', speakTranslation);
+
+            // Auto-resize textarea functionality (optional enhancement, currently fixed height flex)
+        }
+
+        // --- UI Interactions ---
+        function handleInput() {
+            const text = sourceText.value;
+            charCount.textContent = `${text.length} character${text.length !== 1 ? 's' : ''}`;
+            
+            // Enable/disable clear button visual state
+            if (text.length > 0) {
+                clearBtn.classList.remove('opacity-50');
+            } else {
+                clearBtn.classList.add('opacity-50');
+            }
+        }
+
+        function clearInput() {
+            sourceText.value = '';
+            targetText.value = '';
+            handleInput();
+            targetActions.classList.add('opacity-50', 'pointer-events-none');
+            sourceText.focus();
+        }
+
+        function showLoading(show) {
+            if (show) {
+                loadingOverlay.classList.remove('hidden');
+                loadingOverlay.classList.add('flex');
+                translateBtn.disabled = true;
+                targetActions.classList.add('opacity-50', 'pointer-events-none');
+            } else {
+                loadingOverlay.classList.add('hidden');
+                loadingOverlay.classList.remove('flex');
+                translateBtn.disabled = false;
+            }
+        }
+
+        function showToast(message, isError = false) {
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-xl shadow-lg border text-sm font-medium flex items-center gap-2 transform transition-all duration-300 translate-y-10 opacity-0 ${
+                isError 
+                ? 'bg-red-50 text-red-700 border-red-200' 
+                : 'bg-slate-800 text-white border-slate-700'
+            }`;
+            
+            // Icon
+            const icon = document.createElement('i');
+            icon.setAttribute('data-lucide', isError ? 'alert-circle' : 'check-circle');
+            icon.className = 'w-4 h-4';
+            
+            toast.appendChild(icon);
+            toast.appendChild(document.createTextNode(message));
+            toastContainer.appendChild(toast);
+            
+            lucide.createIcons({ root: toast });
+
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-y-10', 'opacity-0');
+            });
+
+            // Remove after 3 seconds
+            setTimeout(() => {
+                toast.classList.add('translate-y-10', 'opacity-0');
+                setTimeout(() => {
+                    if (toast.parentNode) toast.parentNode.removeChild(toast);
+                }, 300); // Wait for transition
+            }, 3000);
+        }
+
+        // --- Translation Logic (Gemini API Integration) ---
+        async function fetchWithRetry(url, options, retries = 5) {
+            const delays = [1000, 2000, 4000, 8000, 16000];
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (!response.ok) {
+                        const errBody = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errBody}`);
+                    }
+                    return await response.json();
+                } catch (e) {
+                    console.warn(`Attempt ${i + 1} failed: ${e.message}`);
+                    if (i === retries - 1) throw e;
+                    await new Promise(res => setTimeout(res, delays[i]));
+                }
+            }
+        }
+
+        async function performTranslation() {
+            const textToTranslate = sourceText.value.trim();
+            if (!textToTranslate) {
+                showToast("Please enter text to translate.", true);
+                sourceText.focus();
+                return;
+            }
+
+            const sourceLang = sourceLangSelect.value;
+            const targetLang = targetLangSelect.value;
+
+            showLoading(true);
+
+            try {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+                
+                // Construct a strict prompt to ensure only the translation is returned
+                const promptInstruction = sourceLang === 'auto' 
+                    ? `Detect the language of the following text and translate it into ${targetLang}.`
+                    : `Translate the following text from ${sourceLang} to ${targetLang}.`;
+                
+                const fullPrompt = `${promptInstruction} Respond ONLY with the translated text. Do not include markdown, quotes, explanations, or original text. \n\nText:\n${textToTranslate}`;
+
+                const payload = {
+                    contents: [{ parts: [{ text: fullPrompt }] }],
+                    systemInstruction: {
+                        parts: [{ text: "You are a professional, accurate, and direct language translator. You must only output the requested translation." }]
+                    }
+                };
+
+                const result = await fetchWithRetry(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const translated = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (translated) {
+                    targetText.value = translated.trim();
+                    targetActions.classList.remove('opacity-50', 'pointer-events-none');
+                } else {
+                    throw new Error("Invalid response format from translation service");
+                }
+
+            } catch (error) {
+                console.error("Translation Error:", error);
+                showToast("Translation failed. Please try again.", true);
+                targetText.value = "";
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // --- Optional Features: Copy & TTS ---
+        function copyTranslation() {
+            const textToCopy = targetText.value;
+            if (!textToCopy) return;
+
+            // Using document.execCommand('copy') as requested for iframe compatibility
+            const textArea = document.createElement("textarea");
+            textArea.value = textToCopy;
+            
+            // Prevent scrolling to bottom
+            textArea.style.top = "0";
+            textArea.style.left = "0";
+            textArea.style.position = "fixed";
+            textArea.style.opacity = "0"; // Make invisible
+
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    showToast("Copied to clipboard!");
+                } else {
+                    showToast("Failed to copy text.", true);
+                }
+            } catch (err) {
+                console.error("Copy error:", err);
+                showToast("Error copying text.", true);
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        function speakTranslation() {
+            const textToSpeak = targetText.value;
+            if (!textToSpeak) return;
+
+            if (!('speechSynthesis' in window)) {
+                showToast("Text-to-speech is not supported in your browser.", true);
+                return;
+            }
+
+            // Stop any current speech
+            window.speechSynthesis.cancel();
+
+            const utterance = new SpeechSynthesisUtterance(textToSpeak);
+            
+            // Find the correct language code for the selected target language
+            const selectedLangName = targetLangSelect.value;
+            const langObj = languages.find(l => l.name === selectedLangName);
+            
+            if (langObj) {
+                utterance.lang = langObj.code;
+            }
+
+            // Optional: Handle errors or speech end events
+            utterance.onerror = (e) => {
+                console.error("SpeechSynthesis error:", e);
+                // Ignore 'interrupted' errors caused by user clicking again quickly
+                if (e.error !== 'interrupted') {
+                     showToast("An error occurred during text-to-speech.", true);
+                }
+            };
+
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // Bootstrap
+        init();
+
+    </script>
+</body>
+</html>
